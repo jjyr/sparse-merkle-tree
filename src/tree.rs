@@ -213,6 +213,24 @@ impl<H: Hasher + Default, V: Value, S: Store<V>> SparseMerkleTree<H, V, S> {
         // recompute the tree from bottom to top
         let mut current_height = 0;
 
+        if path.is_empty() {
+            let node_key = key.parent_path(current_height);
+            let merge_height = u8::MAX;
+            let n_zeros = merge_height - current_height;
+            let parent_node = merge_zeros::<H>(current_height, &node_key, &node, n_zeros);
+
+            // insert branch
+            let branch = BranchNode {
+                fork_key: key,
+                fork_height: current_height,
+                children: Children::WithZero(node, n_zeros),
+            };
+
+            self.store.insert_branch(parent_node, branch)?;
+            node = parent_node;
+            current_height = merge_height;
+        }
+
         // merge siblings
         for merkle_node in path.into_iter().rev() {
             let (parent_node, branch, merge_height) = match merkle_node {
