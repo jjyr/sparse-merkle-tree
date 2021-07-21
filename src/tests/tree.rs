@@ -290,6 +290,7 @@ fn test_merkle_proof(key: H256, value: H256) {
 fn new_smt(pairs: Vec<(H256, H256)>) -> SMT {
     let mut smt = SMT::default();
     for (key, value) in pairs {
+        dbg!("insert pair");
         smt.update(key, value).unwrap();
     }
     smt
@@ -735,9 +736,12 @@ fn test_sibling_leaf() {
         sibling_key.set_bit(0);
     }
     let pairs = vec![(rand_key, gen_rand_h256()), (sibling_key, gen_rand_h256())];
+    assert_ne!(&rand_key, &sibling_key);
     let keys = vec![rand_key, sibling_key];
     let smt = new_smt(pairs.clone());
+    dbg!("done smt");
     let proof = smt.merkle_proof(keys).expect("gen proof");
+    dbg!(&proof);
     assert!(proof
         .verify::<Blake2bHasher>(smt.root(), pairs)
         .expect("verify"));

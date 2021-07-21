@@ -213,6 +213,8 @@ impl<H: Hasher + Default, V: Value, S: Store<V>> SparseMerkleTree<H, V, S> {
         // recompute the tree from bottom to top
         let mut current_height = 0;
 
+        dbg!(&path);
+
         if path.is_empty() {
             let node_key = key.parent_path(current_height);
             let merge_height = u8::MAX;
@@ -226,6 +228,7 @@ impl<H: Hasher + Default, V: Value, S: Store<V>> SparseMerkleTree<H, V, S> {
                 children: Children::WithZero(node, n_zeros),
             };
 
+            dbg!("insert ", &branch);
             self.store.insert_branch(parent_node, branch)?;
             node = parent_node;
             current_height = merge_height;
@@ -233,7 +236,7 @@ impl<H: Hasher + Default, V: Value, S: Store<V>> SparseMerkleTree<H, V, S> {
 
         // merge siblings
         for merkle_node in path.into_iter().rev() {
-            let (parent_node, branch, merge_height) = match merkle_node {
+            let (parent_node, branch, parent_height) = match merkle_node {
                 MerkleNode::Sibling {
                     merge_height,
                     sibling,
@@ -243,8 +246,8 @@ impl<H: Hasher + Default, V: Value, S: Store<V>> SparseMerkleTree<H, V, S> {
                         "path should only contains non-zero nodes"
                     );
                     debug_assert!(
-                        current_height <= merge_height,
-                        "sibling height should be <= current height"
+                        current_height == merge_height,
+                        "sibling height should be == current height"
                     );
 
                     // merge with sibling
@@ -257,17 +260,18 @@ impl<H: Hasher + Default, V: Value, S: Store<V>> SparseMerkleTree<H, V, S> {
                     };
 
                     debug_assert!(!node.is_zero(), "shouldn't be zero");
+                    let parent_height = merge_height + 1;
                     // node is exists
                     let branch = BranchNode {
                         fork_key: key,
-                        fork_height: current_height,
+                        fork_height: parent_height,
                         children: Children::Pair(node, sibling),
                     };
-                    (parent_node, branch, merge_height)
+                    (parent_node, branch, parent_height)
                 }
                 MerkleNode::Zeros {
                     merge_height,
-                    n_zeros: _,
+                    n_zeros: previous_n_zeros,
                 } => {
                     debug_assert!(
                         current_height <= merge_height,
@@ -275,7 +279,8 @@ impl<H: Hasher + Default, V: Value, S: Store<V>> SparseMerkleTree<H, V, S> {
                     );
 
                     let node_key = key.parent_path(current_height);
-                    let n_zeros = merge_height - current_height;
+                    let n_zeros = merge_height + previous_n_zeros - current_height;
+                    dbg!("merge zeros", merge_height, current_height, n_zeros);
                     let parent_node = merge_zeros::<H>(current_height, &node_key, &node, n_zeros);
 
                     // insert branch
@@ -284,13 +289,13 @@ impl<H: Hasher + Default, V: Value, S: Store<V>> SparseMerkleTree<H, V, S> {
                         fork_height: current_height,
                         children: Children::WithZero(node, n_zeros),
                     };
-                    (parent_node, branch, merge_height)
+                    (parent_node, branch, merge_height + n_zeros)
                 }
             };
-
+            dbg!("insert", &branch);
             self.store.insert_branch(parent_node, branch)?;
             node = parent_node;
-            current_height = merge_height;
+            current_height = parent_height;
         }
 
         debug_assert_eq!(current_height, 255, "merge to root");
@@ -452,19 +457,28 @@ impl<H: Hasher + Default, V: Value, S: Store<V>> SparseMerkleTree<H, V, S> {
                     }
                 }
                 Children::WithZero(_node, n_zeros) => {
-                    if merge_height != 0 || key != branch.fork_key {
-                        // path.push((height, node));
-                        f(
-                            parent,
-                            MerkleNode::Zeros {
-                                merge_height,
-                                n_zeros,
-                            },
-                        );
+                    // dbg!(merge_height, key, branch.fork_key);
+                    if merge_height == 0 && key == branch.fork_key {
+                        dbg!("skip leaf it self");
+                        break;
                     }
+                    // if merge_height != 0 || key != branch.fork_key {
+                    // path.push((height, node));
+                    f(
+                        parent,
+                        MerkleNode::Zeros {
+                            merge_height,
+                            n_zeros,
+                        },
+                    );
+                    // dbg!(current_height, merge_height);
                 }
             }
-            current_height = merge_height;
+
+            if merge_height == 0 {
+                break;
+            }
+            current_height = merge_height - 1;
         }
 
         Ok(())
@@ -481,10 +495,10 @@ impl<H: Hasher + Default, V: Value, S: Store<V>> SparseMerkleTree<H, V, S> {
         self.travel_merkle_path(*key, |_parent, merkle_node| {
             let merge_height = merkle_node.merge_height();
             let sibling_path = key.parent_path(merge_height);
-            debug_assert!(
-                cache.contains_key(&(merge_height, sibling_path)),
-                "shouldn't duplicate"
-            );
+            // debug_assert!(
+            //     cache.contains_key(&(merge_height, sibling_path)),
+            //     "shouldn't duplicate"
+            // );
             cache
                 .entry((merge_height, sibling_path))
                 .or_insert(merkle_node);
@@ -501,6 +515,8 @@ impl<H: Hasher + Default, V: Value, S: Store<V>> SparseMerkleTree<H, V, S> {
         // sort keys
         keys.sort_unstable();
 
+        dbg!(keys.len());
+
         // fetch all merkle path
         let mut cache: BTreeMap<(u8, H256), MerkleNode> = Default::default();
         if !self.is_empty() {
@@ -508,6 +524,7 @@ impl<H: Hasher + Default, V: Value, S: Store<V>> SparseMerkleTree<H, V, S> {
                 self.fetch_merkle_path(k, &mut cache)?;
             }
         }
+        dbg!(&cache);
 
         // (node, height)
         let mut proof: Vec<MerkleNode> = Vec::with_capacity(EXPECTED_PATH_SIZE * keys.len());
@@ -521,16 +538,20 @@ impl<H: Hasher + Default, V: Value, S: Store<V>> SparseMerkleTree<H, V, S> {
         let mut queue: VecDeque<(H256, u8, usize)> = keys
             .into_iter()
             .enumerate()
-            .map(|(i, k)| (k, 0, i))
+            .map(|(i, k)| (k.parent_path(0), 0, i))
             .collect();
+
+        dbg!(&queue);
 
         let mut current_height = 0u8;
         while let Some((key, height, leaf_index)) = queue.pop_front() {
+            dbg!("pop leaf", leaf_index);
+            // dbg!(key, height, leaf_index);
             if queue.is_empty() && cache.is_empty() {
                 // tree only contains one leaf
-                if leaves_path[leaf_index].is_empty() {
-                    leaves_path[leaf_index].push(core::u8::MAX);
-                }
+                // if leaves_path[leaf_index].is_empty() {
+                //     leaves_path[leaf_index].push(core::u8::MAX);
+                // }
                 break;
             }
             // compute sibling key
@@ -549,11 +570,16 @@ impl<H: Hasher + Default, V: Value, S: Store<V>> SparseMerkleTree<H, V, S> {
                     .front()
                     .map(|(sibling_key, height, _leaf_index)| (sibling_key, height))
             {
+                assert_eq!(current_height, 0);
                 // drop the sibling, mark sibling's merkle path
-                let (_sibling_key, height, leaf_index) = queue.pop_front().unwrap();
+                let (_sibling_key, height, _leaf_index) = queue.pop_front().unwrap();
+                dbg!("merge with sibling", queue.len(), leaf_index);
                 leaves_path[leaf_index].push(height);
-                current_height += 1;
+                // current_height += 1;
+                let parent_key = key.parent_path(height);
+                queue.push_back((parent_key, height, leaf_index));
             } else {
+                dbg!((height, sibling_key, leaf_index));
                 match cache.remove(&(height, sibling_key)) {
                     Some(merkle_node) => {
                         debug_assert_eq!(current_height, merkle_node.merge_height());
@@ -582,17 +608,18 @@ impl<H: Hasher + Default, V: Value, S: Store<V>> SparseMerkleTree<H, V, S> {
                         }
                     }
                 }
-            }
-            // find new non-zero sibling, append to leaf's path
-            leaves_path[leaf_index].push(height);
-            if height == core::u8::MAX {
-                break;
-            } else {
-                let next_height = height + 1;
-                // get parent_key, which k.get_bit(height) is false
-                let parent_key = key.parent_path(next_height);
-                queue.push_back((parent_key, next_height, leaf_index));
-                current_height = next_height;
+                dbg!("push leaf path", leaf_index, height);
+                // find new non-zero sibling, append to leaf's path
+                leaves_path[leaf_index].push(height);
+                if height == core::u8::MAX {
+                    break;
+                } else {
+                    let next_height = height + 1;
+                    // get parent_key, which k.get_bit(height) is false
+                    let parent_key = key.parent_path(next_height);
+                    queue.push_back((parent_key, next_height, leaf_index));
+                    current_height = next_height;
+                }
             }
         }
         debug_assert_eq!(leaves_path.len(), keys_len);

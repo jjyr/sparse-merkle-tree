@@ -281,10 +281,14 @@ impl MerkleProof {
                 } else {
                     merge::<H>(height, &parent_key, &node, &sibling)
                 };
-                tree_buf.insert((height + 1, parent_key), (leaf_index, parent));
+                // two leaves merged, so the height is still zero
+                // here is a tricky point, 0 represent the lowest branch in SMT.
+                // but a leaf get merged, we also use 0 to represent a branch for leaf, it should be -1 actually.
+                tree_buf.insert((height, parent_key), (leaf_index, parent));
             } else {
                 // merge with merkle siblings
 
+                dbg!("fetch height for leave", leaf_index, &leaves_path);
                 // let merge_height = leaves_path[leaf_index].front().copied().unwrap_or(height);
                 let merge_height = leaves_path[leaf_index]
                     .front()
@@ -298,6 +302,7 @@ impl MerkleProof {
                 //     tree_buf.insert((merge_height, parent_key), (leaf_index, node));
                 //     continue;
                 // }
+                dbg!("pop proof");
                 match proof.pop_front().ok_or(Error::CorruptedProof)? {
                     MerkleNode::Sibling {
                         merge_height,
@@ -318,6 +323,7 @@ impl MerkleProof {
                     } => {
                         assert_eq!(height, merge_height);
                         parent = merge_zeros::<H>(height, &parent_key, &node, n_zeros);
+                        dbg!(height, n_zeros);
                         tree_buf.insert((height + n_zeros, parent_key), (leaf_index, parent));
                     }
                 }
@@ -330,6 +336,7 @@ impl MerkleProof {
                     return Err(Error::CorruptedProof);
                 }
             } else {
+                dbg!("pop leave height", leaf_index);
                 leaves_path[leaf_index].pop_front();
                 tree_buf.insert((height + 1, parent_key), (leaf_index, parent));
             }
