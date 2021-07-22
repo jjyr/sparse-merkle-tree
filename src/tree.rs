@@ -70,15 +70,23 @@ pub enum Children {
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum MerkleNode {
-    Sibling { merge_height: u8, sibling: H256 },
-    Zeros { merge_height: u8, n_zeros: u8 },
+    Sibling {
+        merge_height: u8,
+        sibling: H256,
+    },
+    Zeros {
+        merge_height: u8,
+        fork_key: H256,
+        sibling: H256,
+        n_zeros: u8,
+    },
 }
 
 impl MerkleNode {
     pub fn merge_height(&self) -> u8 {
         match self {
-            &MerkleNode::Sibling { merge_height, .. } => merge_height,
-            &MerkleNode::Zeros { merge_height, .. } => merge_height,
+            Self::Sibling { merge_height, .. } => *merge_height,
+            Self::Zeros { merge_height, .. } => *merge_height,
         }
     }
 }
@@ -213,89 +221,158 @@ impl<H: Hasher + Default, V: Value, S: Store<V>> SparseMerkleTree<H, V, S> {
         // recompute the tree from bottom to top
         let mut current_height = 0;
 
-        dbg!(&path);
+        // dbg!(&path);
 
-        if path.is_empty() {
-            let node_key = key.parent_path(current_height);
-            let merge_height = u8::MAX;
-            let n_zeros = merge_height - current_height;
-            let parent_node = merge_zeros::<H>(current_height, &node_key, &node, n_zeros);
+        let merge_zeros_to_height = |current_height, height, node: H256| -> (H256, BranchNode) {
+            let parent_path = key.parent_path(current_height);
+            assert!(height > current_height);
+            let n_zeros = height - current_height;
+            let parent_node = merge_zeros::<H>(current_height, &parent_path, &node, n_zeros);
 
             // insert branch
             let branch = BranchNode {
                 fork_key: key,
-                fork_height: current_height,
+                fork_height: height,
                 children: Children::WithZero(node, n_zeros),
             };
 
-            dbg!("insert ", &branch);
+            dbg!("merge with n zeros", node, n_zeros, &parent_node);
+            (parent_node, branch)
+        };
+
+        if path.is_empty() {
+            let merge_height = u8::MAX;
+            // node
+            let (parent_node, branch) = merge_zeros_to_height(current_height, merge_height, node);
             self.store.insert_branch(parent_node, branch)?;
             node = parent_node;
             current_height = merge_height;
+            // // mock sibling
+            // let (sibling, branch) = merge_zeros_to_height(0, merge_height, H256::zero());
+            // self.store.insert_branch(sibling, branch)?;
+            // // merge two children
+            // let is_right = key.get_bit(current_height);
+            // let node_key = key.parent_path(current_height);
+            // let parent_node = if is_right {
+            //     // dbg!("merge ", current_height, node_key, &sibling, &node);
+            //     merge::<H>(current_height, &node_key, &sibling, &node)
+            // } else {
+            //     // dbg!("merge ", current_height, node_key, &node, &sibling);
+            //     merge::<H>(current_height, &node_key, &node, &sibling)
+            // };
+
+            // debug_assert!(!node.is_zero(), "shouldn't be zero");
+
+            // // node is exists
+            // let branch = BranchNode {
+            //     fork_key: key,
+            //     fork_height: merge_height,
+            //     children: Children::Pair(node, sibling),
+            // };
+            // // dbg!("insert", &branch);
+            // self.store.insert_branch(parent_node, branch)?;
+            // node = parent_node;
+            // current_height = u8::MAX;
         }
 
         // merge siblings
         for merkle_node in path.into_iter().rev() {
-            let (parent_node, branch, parent_height) = match merkle_node {
+            // align two children to same height
+            let (merge_height, sibling) = match merkle_node {
                 MerkleNode::Sibling {
                     merge_height,
                     sibling,
                 } => {
-                    debug_assert!(
-                        !sibling.is_zero(),
-                        "path should only contains non-zero nodes"
-                    );
-                    debug_assert!(
-                        current_height == merge_height,
-                        "sibling height should be == current height"
-                    );
+                    // debug_assert!(
+                    //     !sibling.is_zero(),
+                    //     "path should only contains non-zero nodes"
+                    // );
+                    // debug_assert!(
+                    //     current_height == merge_height,
+                    //     "sibling height should be == current height"
+                    // );
 
-                    // merge with sibling
-                    let is_right = key.get_bit(current_height);
-                    let node_key = key.parent_path(current_height);
-                    let parent_node = if is_right {
-                        merge::<H>(current_height, &node_key, &sibling, &node)
-                    } else {
-                        merge::<H>(current_height, &node_key, &node, &sibling)
-                    };
+                    // align to the height of sibling if current height is lower
+                    if current_height < merge_height {
+                        let (parent_node, branch) =
+                            merge_zeros_to_height(current_height, merge_height, node);
+                        self.store.insert_branch(parent_node, branch)?;
+                        node = parent_node;
+                        current_height = merge_height;
+                    }
 
-                    debug_assert!(!node.is_zero(), "shouldn't be zero");
-                    let parent_height = merge_height + 1;
-                    // node is exists
-                    let branch = BranchNode {
-                        fork_key: key,
-                        fork_height: parent_height,
-                        children: Children::Pair(node, sibling),
-                    };
-                    (parent_node, branch, parent_height)
+                    (merge_height, sibling)
                 }
                 MerkleNode::Zeros {
-                    merge_height,
-                    n_zeros: previous_n_zeros,
+                    merge_height: zero_node_merge_height,
+                    fork_key,
+                    mut sibling,
+                    n_zeros,
                 } => {
-                    debug_assert!(
-                        current_height <= merge_height,
-                        "sibling height should be <= current height"
-                    );
+                    // debug_assert!(
+                    //     current_height <= merge_height,
+                    //     "sibling height should be <= current height"
+                    // );
 
-                    let node_key = key.parent_path(current_height);
-                    let n_zeros = merge_height + previous_n_zeros - current_height;
-                    dbg!("merge zeros", merge_height, current_height, n_zeros);
-                    let parent_node = merge_zeros::<H>(current_height, &node_key, &node, n_zeros);
+                    // calculate merge point
+                    let merge_height = key.fork_height(&fork_key);
 
-                    // insert branch
-                    let branch = BranchNode {
-                        fork_key: key,
-                        fork_height: current_height,
-                        children: Children::WithZero(node, n_zeros),
-                    };
-                    (parent_node, branch, merge_height + n_zeros)
+                    // align node to the merge point
+                    if current_height < merge_height {
+                        let (parent_node, branch) =
+                            merge_zeros_to_height(current_height, merge_height, node);
+                        self.store.insert_branch(parent_node, branch)?;
+                        node = parent_node;
+                        current_height = merge_height;
+                    }
+
+                    // align sibling to the merge point
+                    let sibling_height = zero_node_merge_height - n_zeros;
+                    if sibling_height < merge_height {
+                        let (parent_node, branch) =
+                            merge_zeros_to_height(sibling_height, merge_height, sibling);
+                        self.store.insert_branch(parent_node, branch)?;
+                        sibling = parent_node;
+                    }
+
+                    (merge_height, sibling)
                 }
             };
-            dbg!("insert", &branch);
+
+            // merge two children
+            let is_right = key.get_bit(current_height);
+            let node_key = key.parent_path(current_height);
+            let parent_node = if is_right {
+                dbg!("merge ", current_height, node_key, &sibling, &node);
+                merge::<H>(current_height, &node_key, &sibling, &node)
+            } else {
+                dbg!("merge ", current_height, node_key, &node, &sibling);
+                merge::<H>(current_height, &node_key, &node, &sibling)
+            };
+
+            debug_assert!(!node.is_zero(), "shouldn't be zero");
+            // node is exists
+            let branch = BranchNode {
+                fork_key: key,
+                fork_height: merge_height,
+                children: Children::Pair(node, sibling),
+            };
+            // dbg!("insert", &branch);
             self.store.insert_branch(parent_node, branch)?;
             node = parent_node;
-            current_height = parent_height;
+            if merge_height == 255 {
+                current_height = 255;
+                break;
+            }
+            current_height = merge_height + 1;
+        }
+
+        if current_height < u8::MAX {
+            let merge_height = u8::MAX;
+            let (parent_node, branch) = merge_zeros_to_height(current_height, merge_height, node);
+            self.store.insert_branch(parent_node, branch)?;
+            node = parent_node;
+            current_height = merge_height;
         }
 
         debug_assert_eq!(current_height, 255, "merge to root");
@@ -417,6 +494,7 @@ impl<H: Hasher + Default, V: Value, S: Store<V>> SparseMerkleTree<H, V, S> {
         let mut node = self.root;
         let mut current_height = u8::MAX;
         while current_height > 0 {
+            // dbg!("wtf");
             let branch = self
                 .store
                 .get_branch(&node)?
@@ -455,30 +533,38 @@ impl<H: Hasher + Default, V: Value, S: Store<V>> SparseMerkleTree<H, V, S> {
                             },
                         );
                     }
+                    current_height = merge_height;
+                    // dbg!(current_height);
                 }
-                Children::WithZero(_node, n_zeros) => {
+                Children::WithZero(origin_node, n_zeros) => {
+                    // dbg!(&origin_node);
                     // dbg!(merge_height, key, branch.fork_key);
                     if merge_height == 0 && key == branch.fork_key {
-                        dbg!("skip leaf it self");
+                        // dbg!("skip leaf it self");
                         break;
                     }
                     // if merge_height != 0 || key != branch.fork_key {
                     // path.push((height, node));
+                    let fork_key = key.parent_path(merge_height - n_zeros);
                     f(
                         parent,
                         MerkleNode::Zeros {
                             merge_height,
+                            sibling: origin_node,
+                            fork_key,
                             n_zeros,
                         },
                     );
                     // dbg!(current_height, merge_height);
+                    current_height = merge_height - n_zeros;
+                    node = origin_node;
+                    // dbg!(current_height, merge_height, n_zeros);
                 }
             }
 
             if merge_height == 0 {
                 break;
             }
-            current_height = merge_height - 1;
         }
 
         Ok(())
@@ -493,15 +579,30 @@ impl<H: Hasher + Default, V: Value, S: Store<V>> SparseMerkleTree<H, V, S> {
     ) -> Result<()> {
         // travel tree from top to bottom
         self.travel_merkle_path(*key, |_parent, merkle_node| {
-            let merge_height = merkle_node.merge_height();
-            let sibling_path = key.parent_path(merge_height);
+            let height = match merkle_node {
+                MerkleNode::Sibling { merge_height, .. } => merge_height,
+                MerkleNode::Zeros {
+                    merge_height,
+                    n_zeros,
+                    ..
+                } => {
+                    return;
+                }
+            };
+            // let height = match merkle_node {
+            //     MerkleNode::Sibling { merge_height, .. } => merge_height,
+            //     MerkleNode::Zeros {
+            //         merge_height,
+            //         n_zeros,
+            //         ..
+            //     } => merge_height - n_zeros,
+            // };
+            let sibling_path = key.parent_path(height);
             // debug_assert!(
             //     cache.contains_key(&(merge_height, sibling_path)),
             //     "shouldn't duplicate"
             // );
-            cache
-                .entry((merge_height, sibling_path))
-                .or_insert(merkle_node);
+            cache.entry((height, sibling_path)).or_insert(merkle_node);
         })?;
         Ok(())
     }
@@ -515,7 +616,7 @@ impl<H: Hasher + Default, V: Value, S: Store<V>> SparseMerkleTree<H, V, S> {
         // sort keys
         keys.sort_unstable();
 
-        dbg!(keys.len());
+        // dbg!(keys.len());
 
         // fetch all merkle path
         let mut cache: BTreeMap<(u8, H256), MerkleNode> = Default::default();
@@ -524,7 +625,7 @@ impl<H: Hasher + Default, V: Value, S: Store<V>> SparseMerkleTree<H, V, S> {
                 self.fetch_merkle_path(k, &mut cache)?;
             }
         }
-        dbg!(&cache);
+        // dbg!(&cache);
 
         // (node, height)
         let mut proof: Vec<MerkleNode> = Vec::with_capacity(EXPECTED_PATH_SIZE * keys.len());
@@ -541,11 +642,11 @@ impl<H: Hasher + Default, V: Value, S: Store<V>> SparseMerkleTree<H, V, S> {
             .map(|(i, k)| (k.parent_path(0), 0, i))
             .collect();
 
-        dbg!(&queue);
+        // dbg!(&queue);
 
         let mut current_height = 0u8;
         while let Some((key, height, leaf_index)) = queue.pop_front() {
-            dbg!("pop leaf", leaf_index);
+            // dbg!("pop leaf", leaf_index);
             // dbg!(key, height, leaf_index);
             if queue.is_empty() && cache.is_empty() {
                 // tree only contains one leaf
@@ -573,23 +674,34 @@ impl<H: Hasher + Default, V: Value, S: Store<V>> SparseMerkleTree<H, V, S> {
                 assert_eq!(current_height, 0);
                 // drop the sibling, mark sibling's merkle path
                 let (_sibling_key, height, _leaf_index) = queue.pop_front().unwrap();
-                dbg!("merge with sibling", queue.len(), leaf_index);
+                // delete duplicated sibling from cache
+                // dbg!("delete sibling", (height, sibling_key));
+                // cache.remove(&(height, sibling_key));
+                // dbg!("merge with sibling", queue.len(), leaf_index);
                 leaves_path[leaf_index].push(height);
                 // current_height += 1;
                 let parent_key = key.parent_path(height);
-                queue.push_back((parent_key, height, leaf_index));
+                queue.push_back((parent_key, height + 1, leaf_index));
             } else {
-                dbg!((height, sibling_key, leaf_index));
+                // dbg!((height, sibling_key, leaf_index));
+                // dbg!(&cache);
                 match cache.remove(&(height, sibling_key)) {
                     Some(merkle_node) => {
-                        debug_assert_eq!(current_height, merkle_node.merge_height());
-                        current_height = merkle_node.merge_height() + 1;
+                        let merge_height = match merkle_node {
+                            MerkleNode::Sibling { merge_height, .. } => merge_height,
+                            MerkleNode::Zeros { fork_key, .. } => key.fork_height(&fork_key),
+                        };
+                        leaves_path[leaf_index].push(merge_height);
+                        current_height = merge_height;
+                        // debug_assert_eq!(current_height, merkle_node.merge_height());
+                        // current_height = merkle_node.merge_height() + 1;
                         // save first non-zero sibling's height for leaves
                         proof.push(merkle_node);
                     }
                     None => {
+                        // dbg!(&cache);
                         // a leaf either merge with a zero or a non-zero, both we generate a sibling for it
-                        unreachable!();
+                        // unreachable!();
                         // skip zero siblings
                         // if !is_right {
                         //     sibling_key.clear_bit(height);
@@ -600,28 +712,36 @@ impl<H: Hasher + Default, V: Value, S: Store<V>> SparseMerkleTree<H, V, S> {
                             }
                             break;
                         } else {
-                            // if the key not in the cache, means our sibling is zero
-                            // so we just pushing back
-                            let parent_key = sibling_key;
-                            queue.push_back((parent_key, height + 1, leaf_index));
-                            continue;
-                        }
+                            break;
+                            // // if the key not in the cache, means our sibling is zero
+                            // // so we just pushing back
+                            // let parent_key = sibling_key;
+                            // queue.push_back((parent_key, height + 1, leaf_index));
+                            // continue;
+                        };
                     }
                 }
                 dbg!("push leaf path", leaf_index, height);
                 // find new non-zero sibling, append to leaf's path
-                leaves_path[leaf_index].push(height);
+                // leaves_path[leaf_index].push(height);
                 if height == core::u8::MAX {
                     break;
-                } else {
-                    let next_height = height + 1;
-                    // get parent_key, which k.get_bit(height) is false
-                    let parent_key = key.parent_path(next_height);
-                    queue.push_back((parent_key, next_height, leaf_index));
-                    current_height = next_height;
                 }
+                //  else {
+                //     let next_height = height + 1;
+                //     // get parent_key, which k.get_bit(height) is false
+                //     let parent_key = key.parent_path(next_height);
+                //     queue.push_back((parent_key, next_height, leaf_index));
+                //     current_height = next_height;
+                // }
             }
         }
+
+        // merge with zeros if not match MAX
+        if current_height < core::u8::MAX {
+            leaves_path[0].push(core::u8::MAX);
+        }
+        // assert_eq!(current_height, core::u8::MAX);
         debug_assert_eq!(leaves_path.len(), keys_len);
         Ok(MerkleProof::new(leaves_path, proof))
     }

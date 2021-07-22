@@ -293,6 +293,7 @@ fn new_smt(pairs: Vec<(H256, H256)>) -> SMT {
         dbg!("insert pair");
         smt.update(key, value).unwrap();
     }
+            // dbg!("done");
     smt
 }
 

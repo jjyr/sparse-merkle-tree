@@ -258,6 +258,14 @@ impl MerkleProof {
             tree_buf.remove(&(height, key));
 
             if proof.is_empty() && tree_buf.is_empty() {
+                // merge to height
+                if height < u8::MAX {
+                    let n_zeros = u8::MAX - height;
+                    let node_key = key.parent_path(height);
+                    dbg!(height, node_key, node, n_zeros);
+                    let node = merge_zeros::<H>(height, &node_key, &node, n_zeros);
+                    return Ok(node);
+                }
                 return Ok(node);
             }
 
@@ -276,24 +284,28 @@ impl MerkleProof {
                 // (sibling, height)
                 // skip zero merkle path
 
+                dbg!("merge with sibling", height, parent_key, node, sibling);
                 parent = if key.get_bit(height) {
                     merge::<H>(height, &parent_key, &sibling, &node)
                 } else {
                     merge::<H>(height, &parent_key, &node, &sibling)
                 };
+                // dbg!(&parent);
+                let next_height = height + 1;
+                let parent_key = key.parent_path(next_height);
                 // two leaves merged, so the height is still zero
                 // here is a tricky point, 0 represent the lowest branch in SMT.
                 // but a leaf get merged, we also use 0 to represent a branch for leaf, it should be -1 actually.
-                tree_buf.insert((height, parent_key), (leaf_index, parent));
+                tree_buf.insert((next_height, parent_key), (leaf_index, parent));
             } else {
                 // merge with merkle siblings
 
-                dbg!("fetch height for leave", leaf_index, &leaves_path);
                 // let merge_height = leaves_path[leaf_index].front().copied().unwrap_or(height);
-                let merge_height = leaves_path[leaf_index]
-                    .front()
-                    .copied()
-                    .ok_or(Error::CorruptedProof)?;
+                // let merge_height = leaves_path[leaf_index]
+                //     .front()
+                //     .copied()
+                //     .ok_or(Error::CorruptedProof)?;
+                let merge_height = height;
                 // TODO can we remove leaves_path from proof?
                 assert_eq!(merge_height, height);
                 // if height != merge_height {
@@ -302,7 +314,7 @@ impl MerkleProof {
                 //     tree_buf.insert((merge_height, parent_key), (leaf_index, node));
                 //     continue;
                 // }
-                dbg!("pop proof");
+                // dbg!("pop proof");
                 match proof.pop_front().ok_or(Error::CorruptedProof)? {
                     MerkleNode::Sibling {
                         merge_height,
@@ -310,6 +322,7 @@ impl MerkleProof {
                     } => {
                         assert_eq!(height, merge_height);
 
+                        // dbg!("merge merkle sibling", merge_height);
                         parent = if key.get_bit(height) {
                             merge::<H>(height, &parent_key, &sibling, &node)
                         } else {
@@ -320,10 +333,13 @@ impl MerkleProof {
                     MerkleNode::Zeros {
                         merge_height,
                         n_zeros,
+                        fork_key,
+                        sibling,
                     } => {
+                        // dbg!("merge zeros", merge_height, n_zeros);
                         assert_eq!(height, merge_height);
                         parent = merge_zeros::<H>(height, &parent_key, &node, n_zeros);
-                        dbg!(height, n_zeros);
+                        // dbg!(height, n_zeros);
                         tree_buf.insert((height + n_zeros, parent_key), (leaf_index, parent));
                     }
                 }
@@ -336,9 +352,9 @@ impl MerkleProof {
                     return Err(Error::CorruptedProof);
                 }
             } else {
-                dbg!("pop leave height", leaf_index);
-                leaves_path[leaf_index].pop_front();
-                tree_buf.insert((height + 1, parent_key), (leaf_index, parent));
+                // dbg!("pop leave height", leaf_index);
+                // leaves_path[leaf_index].pop_front();
+                // tree_buf.insert((height + 1, parent_key), (leaf_index, parent));
             }
         }
 

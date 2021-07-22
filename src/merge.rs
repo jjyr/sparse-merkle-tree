@@ -6,9 +6,12 @@ pub const MERGE_TYPE_NODE: u8 = 1;
 
 /// Merge two hash with node information
 pub fn merge<H: Hasher + Default>(height: u8, node_key: &H256, lhs: &H256, rhs: &H256) -> H256 {
+    if lhs.is_zero() && rhs.is_zero() {
+        return H256::zero();
+    }
     // Should use merge_zeros
-    debug_assert!(!lhs.is_zero(), "wrong merge type");
-    debug_assert!(!rhs.is_zero(), "wrong merge type");
+    // debug_assert!(!lhs.is_zero(), "wrong merge type");
+    // debug_assert!(!rhs.is_zero(), "wrong merge type");
     let mut hasher = H::default();
     hasher.write_byte(MERGE_TYPE_NODE);
     hasher.write_byte(height);
@@ -25,6 +28,8 @@ pub fn merge_zeros<H: Hasher + Default>(
     value: &H256,
     n_zeros: u8,
 ) -> H256 {
+    // can't merge with 0
+    assert_ne!(n_zeros, 0);
     // Optimized for zero values
     if value.is_zero() {
         return H256::zero();
