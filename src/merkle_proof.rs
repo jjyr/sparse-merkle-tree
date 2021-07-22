@@ -182,6 +182,16 @@ impl MerkleProof {
             tree_buf.remove(&(node_height, key));
 
             if proof.is_empty() && tree_buf.is_empty() {
+                // align to root
+                let merge_height = u8::MAX;
+                let node_key = key.parent_path(node_height);
+                // align node to merge_height
+                if node_height < merge_height {
+                    let n_zeros = merge_height - node_height;
+                    node = align_with_zeros::<H>(node_height, &node_key, &node, n_zeros);
+                    node_height = merge_height;
+                }
+
                 return Ok(node);
             }
 

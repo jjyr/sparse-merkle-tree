@@ -649,6 +649,7 @@ impl<H: Hasher + Default, V: Value, S: Store<V>> SparseMerkleTree<H, V, S> {
             }
         }
         debug_assert_eq!(leaves_path.len(), keys_len);
+        dbg!(&leaves_path, &proof);
         Ok(MerkleProof::new(leaves_path, proof))
     }
 }
