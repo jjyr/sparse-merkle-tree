@@ -58,13 +58,14 @@ impl BranchNode {
     // get node at a specific height
     fn node_at(&self, height: u8) -> NodeType {
         match self.node_type {
-            NodeType::Pair(node, sibling) => {
-                let is_right = self.key.get_bit(height);
-                if is_right {
-                    NodeType::Pair(sibling, node)
-                } else {
-                    NodeType::Pair(node, sibling)
-                }
+            NodeType::Pair(lhs, rhs) => {
+                // let is_right = self.key.get_bit(height);
+                // if is_right {
+                //     NodeType::Pair(sibling, node)
+                // } else {
+                //     NodeType::Pair(node, sibling)
+                // }
+                NodeType::Pair(lhs, rhs)
             }
             NodeType::Single(node) => NodeType::Single(node),
         }
@@ -335,7 +336,7 @@ impl<H: Hasher + Default, V: Value, S: Store<V>> SparseMerkleTree<H, V, S> {
 
     /// Update a leaf, return new merkle root
     /// set to zero value to delete a key
-    pub fn update(&mut self, key: H256, value: V) -> Result<H256> {
+    pub fn update(&mut self, mut key: H256, value: V) -> Result<H256> {
         // store the path, sparse index will ignore zero members
         let mut path = Vec::new();
         if !self.is_empty() {
@@ -355,19 +356,15 @@ impl<H: Hasher + Default, V: Value, S: Store<V>> SparseMerkleTree<H, V, S> {
                         } else {
                             self.store.remove_branch(&node)?;
                             let is_right = key.get_bit(height);
-                            dbg!("push", height, branch_node.key, branch_node.fork_height);
+                            let sibling;
                             if is_right {
                                 node = right;
-                                path.push((height, branch_node.key, branch_node.fork_height, left));
+                                sibling = left;
                             } else {
                                 node = left;
-                                path.push((
-                                    height,
-                                    branch_node.key,
-                                    branch_node.fork_height,
-                                    right,
-                                ));
+                                sibling = right;
                             }
+                            path.push((height, branch_node.key, branch_node.fork_height, sibling));
                         }
                     }
                     NodeType::Single(node) => {
@@ -410,7 +407,20 @@ impl<H: Hasher + Default, V: Value, S: Store<V>> SparseMerkleTree<H, V, S> {
                 if fork_height == 0 {
                     ()
                 }
-                assert_eq!(fork_height, merge_height);
+                // assert_eq!(fork_height, merge_height);
+            }
+
+            assert!(!node.is_zero() || !sibling.is_zero(), "does this happen?");
+            // set sibling as node, then continue
+            if node.is_zero() {
+                let fork_height  = key.fork_height(&sibling_key);
+                node = sibling;
+                if key.get_bit(sibling_height) {
+                    key.clear_bit(sibling_height)
+                } else {
+                    key.set_bit(sibling_height)
+                }
+                continue;
             }
 
             let origin_node = node;
@@ -439,12 +449,14 @@ impl<H: Hasher + Default, V: Value, S: Store<V>> SparseMerkleTree<H, V, S> {
             } else {
                 (node, sibling, origin_node, origin_sibling)
             };
+
             let parent = merge::<H>(merge_height, &node_key, &lhs, &rhs);
 
             if !node.is_zero() {
                 // node is exists
+                let parent_key = key.parent_path(merge_height);
                 let branch_node = BranchNode {
-                    key,
+                    key: parent_key,
                     fork_height: merge_height,
                     node_type: NodeType::Pair(origin_lhs, origin_rhs),
                 };
