@@ -21,11 +21,7 @@ impl core::fmt::Display for Error {
     fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
         match self {
             Error::MissingBranch(key) => {
-                write!(
-                    f,
-                    "Corrupted store, missing branch key:{:?}",
-                    key
-                )?;
+                write!(f, "Corrupted store, missing branch key:{:?}", key)?;
             }
             Error::MissingLeaf(key) => {
                 write!(f, "Corrupted store, missing leaf {:?}", key)?;

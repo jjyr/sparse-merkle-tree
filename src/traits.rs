@@ -1,4 +1,8 @@
-use crate::{H256, error::Error, tree::{BranchKey, BranchNode, LeafNode}};
+use crate::{
+    error::Error,
+    tree::{BranchKey, BranchNode, LeafNode},
+    H256,
+};
 
 /// Trait for customize hash function
 pub trait Hasher {

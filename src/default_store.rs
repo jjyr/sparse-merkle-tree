@@ -1,4 +1,10 @@
-use crate::{H256, collections, error::Error, traits::Store, tree::{BranchKey, BranchNode, LeafNode}};
+use crate::{
+    collections,
+    error::Error,
+    traits::Store,
+    tree::{BranchKey, BranchNode, LeafNode},
+    H256,
+};
 
 #[derive(Debug, Clone, Default)]
 pub struct DefaultStore<V> {

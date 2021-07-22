@@ -413,7 +413,7 @@ impl<H: Hasher + Default, V: Value, S: Store<V>> SparseMerkleTree<H, V, S> {
             assert!(!node.is_zero() || !sibling.is_zero(), "does this happen?");
             // set sibling as node, then continue
             if node.is_zero() {
-                let fork_height  = key.fork_height(&sibling_key);
+                let fork_height = key.fork_height(&sibling_key);
                 node = sibling;
                 if key.get_bit(sibling_height) {
                     key.clear_bit(sibling_height)
@@ -463,6 +463,9 @@ impl<H: Hasher + Default, V: Value, S: Store<V>> SparseMerkleTree<H, V, S> {
                 self.store.insert_branch(parent, branch_node)?;
             }
             node = parent;
+            if node_height == u8::MAX {
+                break;
+            }
             node_height += 1;
         }
 
@@ -649,7 +652,6 @@ impl<H: Hasher + Default, V: Value, S: Store<V>> SparseMerkleTree<H, V, S> {
             }
         }
         debug_assert_eq!(leaves_path.len(), keys_len);
-        dbg!(&leaves_path, &proof);
         Ok(MerkleProof::new(leaves_path, proof))
     }
 }
