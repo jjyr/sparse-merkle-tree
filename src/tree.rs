@@ -205,17 +205,51 @@ impl<H: Hasher + Default, V: Value, S: Store<V>> SparseMerkleTree<H, V, S> {
     //     Ok(&self.root)
     // }
 
+    // /// Get value of a leaf
+    // /// return zero value if leaf not exists
+    // pub fn get(&self, key: &H256) -> Result<V> {
+    //     if self.is_empty() {
+    //         return Ok(V::zero());
+    //     }
+    //     Ok(self
+    //         .store
+    //         .get_leaf(key)?
+    //         .map(|l| l.value)
+    //         .unwrap_or_else(V::zero))
+    // }
+
     /// Get value of a leaf
     /// return zero value if leaf not exists
     pub fn get(&self, key: &H256) -> Result<V> {
         if self.is_empty() {
             return Ok(V::zero());
         }
-        Ok(self
-            .store
-            .get_leaf(key)?
-            .map(|l| l.value)
-            .unwrap_or_else(V::zero))
+
+        let mut node = self.root.node;
+        loop {
+            let branch_node = self
+                .store
+                .get_branch(&node)?
+                .ok_or_else(|| Error::MissingBranch(node))?;
+
+            match branch_node.node_at(branch_node.fork_height) {
+                NodeType::Pair(left, right) => {
+                    let is_right = key.get_bit(branch_node.fork_height);
+                    node = if is_right { right } else { left };
+                }
+                NodeType::Single(node) => {
+                    if key == branch_node.key() {
+                        return Ok(self
+                            .store
+                            .get_leaf(&node)?
+                            .ok_or_else(|| Error::MissingLeaf(node))?
+                            .value);
+                    } else {
+                        return Ok(V::zero());
+                    }
+                }
+            }
+        }
     }
 
     // /// Generate merkle proof
@@ -321,6 +355,7 @@ impl<H: Hasher + Default, V: Value, S: Store<V>> SparseMerkleTree<H, V, S> {
                         } else {
                             self.store.remove_branch(&node)?;
                             let is_right = key.get_bit(height);
+                            dbg!("push", height, branch_node.key, branch_node.fork_height);
                             if is_right {
                                 node = right;
                                 path.push((height, branch_node.key, branch_node.fork_height, left));
@@ -371,7 +406,11 @@ impl<H: Hasher + Default, V: Value, S: Store<V>> SparseMerkleTree<H, V, S> {
         for (merge_height, sibling_key, mut sibling_height, mut sibling) in path.into_iter().rev() {
             // make sure merge height is correct
             {
-                assert_eq!(key.fork_height(&sibling_key), merge_height);
+                let fork_height = key.fork_height(&sibling_key);
+                if fork_height == 0 {
+                    ()
+                }
+                assert_eq!(fork_height, merge_height);
             }
 
             let origin_node = node;
