@@ -262,7 +262,7 @@ impl MerkleProof {
                 if height < u8::MAX {
                     let n_zeros = u8::MAX - height;
                     let node_key = key.parent_path(height);
-                    dbg!(height, node_key, node, n_zeros);
+                    // dbg!(height, node_key, node, n_zeros);
                     let node = merge_zeros::<H>(height, &node_key, &node, n_zeros);
                     return Ok(node);
                 }
@@ -284,7 +284,7 @@ impl MerkleProof {
                 // (sibling, height)
                 // skip zero merkle path
 
-                dbg!("merge with sibling", height, parent_key, node, sibling);
+                // dbg!("merge with sibling", height, parent_key, node, sibling);
                 parent = if key.get_bit(height) {
                     merge::<H>(height, &parent_key, &sibling, &node)
                 } else {

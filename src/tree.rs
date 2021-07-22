@@ -46,6 +46,12 @@ pub struct BranchNode {
 }
 
 impl BranchNode {
+    fn height(&self) -> u8 {
+        match &self.children {
+            &Children::Pair(..) => self.fork_height + 1,
+            &Children::WithZero(_, n_zeros) => self.fork_height - n_zeros,
+        }
+    }
     // get node at a specific height
     fn children_at_height(&self, height: u8) -> Children {
         match &self.children {
@@ -236,7 +242,7 @@ impl<H: Hasher + Default, V: Value, S: Store<V>> SparseMerkleTree<H, V, S> {
                 children: Children::WithZero(node, n_zeros),
             };
 
-            dbg!("merge with n zeros", node, n_zeros, &parent_node);
+            // dbg!("merge with n zeros", node, n_zeros, &parent_node);
             (parent_node, branch)
         };
 
@@ -343,10 +349,10 @@ impl<H: Hasher + Default, V: Value, S: Store<V>> SparseMerkleTree<H, V, S> {
             let is_right = key.get_bit(current_height);
             let node_key = key.parent_path(current_height);
             let parent_node = if is_right {
-                dbg!("merge ", current_height, node_key, &sibling, &node);
+                // dbg!("merge ", current_height, node_key, &sibling, &node);
                 merge::<H>(current_height, &node_key, &sibling, &node)
             } else {
-                dbg!("merge ", current_height, node_key, &node, &sibling);
+                // dbg!("merge ", current_height, node_key, &node, &sibling);
                 merge::<H>(current_height, &node_key, &node, &sibling)
             };
 
@@ -504,11 +510,17 @@ impl<H: Hasher + Default, V: Value, S: Store<V>> SparseMerkleTree<H, V, S> {
             // get highest merge height of the branch node
             let merge_height =
                 core::cmp::max(key.fork_height(&branch.fork_key), branch.fork_height);
+
+            if branch.height() == 0 && branch.fork_key == key {
+                // dbg!("is self");
+                current_height = 0;
+                break;
+            }
             // fetch the childrens by key info
             match branch.children_at_height(merge_height) {
                 Children::Pair(left, right) => {
                     if merge_height > branch.fork_height {
-                        // know fork_height should through merge zeros to 254 height. thus, merge_height should never > fork_height
+                        // if we are heigher than sibling, generate a with zero node, to align sibling to merge height
                         unreachable!();
                         // // the merge height is higher than node, so we do not need to remove node's branch
                         // path.push((merge_height, node));
@@ -551,7 +563,7 @@ impl<H: Hasher + Default, V: Value, S: Store<V>> SparseMerkleTree<H, V, S> {
                         MerkleNode::Zeros {
                             merge_height,
                             sibling: origin_node,
-                            fork_key,
+                            fork_key: key,
                             n_zeros,
                         },
                     );

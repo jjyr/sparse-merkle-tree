@@ -7,6 +7,7 @@ pub const MERGE_TYPE_NODE: u8 = 1;
 /// Merge two hash with node information
 pub fn merge<H: Hasher + Default>(height: u8, node_key: &H256, lhs: &H256, rhs: &H256) -> H256 {
     if lhs.is_zero() && rhs.is_zero() {
+        unreachable!();
         return H256::zero();
     }
     // Should use merge_zeros
