@@ -255,14 +255,15 @@ fn test_update(key: H256, value: H256) {
 
 fn test_update_tree_store(key: H256, value: H256, value2: H256) {
     const EXPECTED_LEAVES_LEN: usize = 1;
+    const EXPECTED_BRANCHES_LEN: usize = 1;
 
     let mut tree = SMT::default();
     tree.update(key, value).expect("update");
-    assert_eq!(tree.store().branches_map().len(), 256);
-    assert_eq!(tree.store().leaves_map().len(), EXPECTED_LEAVES_LEN);
+    assert!(tree.store().branches_map().len() <= EXPECTED_BRANCHES_LEN);
+    assert!(tree.store().leaves_map().len() <= EXPECTED_LEAVES_LEN);
     tree.update(key, value2).expect("update");
-    assert_eq!(tree.store().branches_map().len(), 256);
-    assert_eq!(tree.store().leaves_map().len(), EXPECTED_LEAVES_LEN);
+    assert!(tree.store().branches_map().len() <= EXPECTED_BRANCHES_LEN);
+    assert!(tree.store().leaves_map().len() <= EXPECTED_LEAVES_LEN);
     assert_eq!(tree.get(&key), Ok(value2));
 }
 
