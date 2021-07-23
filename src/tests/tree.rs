@@ -790,6 +790,33 @@ fn test_v0_3_broken_sample() {
 }
 
 #[test]
+fn test_smt_random_insert_order_1() {
+    let keys = vec![
+        "0000000000000000000000000000000000000000000000000000000000000000",
+        "0000000000000000000000000000000000000000000000000000000000000002",
+        "0000000000000000000000000000000000000000000000000000000000000003",
+    ]
+    .into_iter()
+    .map(parse_h256)
+    .collect::<Vec<_>>();
+    let values = vec![
+        "000000000000000000000000c8328aabcd9b9e8e64fbc566c4385c3bdeb219d7",
+        "000000000000000000000001c8328aabcd9b9e8e64fbc566c4385c3bdeb219d7",
+        "0000384000001c2000000e1000000708000002580000012c000000780000003c",
+    ]
+    .into_iter()
+    .map(parse_h256)
+    .collect::<Vec<_>>();
+    let pairs = keys.into_iter().zip(values.into_iter()).collect::<Vec<_>>();
+    let smt1 = new_smt(pairs.clone());
+    let root1 = smt1.root();
+
+    let smt2 = new_smt(vec![pairs[1], pairs[2], pairs[0]]);
+    let root2 = smt2.root();
+    assert_eq!(root1, root2);
+}
+
+#[test]
 fn test_replay_to_pass_proof() {
     let key1: H256 = [
         1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
