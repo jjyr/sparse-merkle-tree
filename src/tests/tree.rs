@@ -666,6 +666,44 @@ fn test_smt_single_leaf_small_2() {
 }
 
 #[test]
+fn test_smt_non_exists_leaves_1() {
+    let pairs = vec![(
+        H256::from([
+            0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+            0, 0, 0,
+        ]),
+        H256::from([
+            0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+            0, 0, 0,
+        ]),
+    )];
+    let pairs2 = vec![(
+        H256::from([
+            0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+            0, 0, 1,
+        ]),
+        H256::from([
+            0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 3, 249, 250, 177, 158, 118, 10, 25, 36, 244,
+            199, 207, 72, 202, 4, 214, 146, 190, 187,
+        ]),
+    )];
+    let smt = new_smt(pairs);
+    let non_exists_keys: Vec<_> = pairs2.into_iter().map(|(k, _v)| k).collect();
+    let proof = smt
+        .merkle_proof(non_exists_keys.clone())
+        .expect("gen proof");
+    let data: Vec<(H256, H256)> = non_exists_keys
+        .into_iter()
+        .map(|k| (k, H256::zero()))
+        .collect();
+    // let compiled_proof = proof.clone().compile(data.clone()).expect("compile proof");
+    assert!(proof
+        .verify::<Blake2bHasher>(&smt.root(), data.clone())
+        .expect("verify proof"));
+    // assert!(compiled_proof.verify::<Blake2bHasher>(smt.root(), data).expect("verify compiled proof"));
+}
+
+#[test]
 fn test_v0_2_broken_sample() {
     let keys = vec![
         "0000000000000000000000000000000000000000000000000000000000000000",
