@@ -358,7 +358,7 @@ impl<H: Hasher + Default, V: Value, S: Store<V>> SparseMerkleTree<H, V, S> {
                     NodeType::Pair(left, right) => {
                         if height > branch_node.fork_height {
                             // the merge height is higher than node, so we do not need to remove node's branch
-                            path.push((height, branch_node.key, branch_node.fork_height, node));
+                            path.push((height, branch_node.key, branch_node.height(), node));
                             break;
                         } else {
                             self.store.remove_branch(&node)?;
@@ -382,7 +382,7 @@ impl<H: Hasher + Default, V: Value, S: Store<V>> SparseMerkleTree<H, V, S> {
                             path.push((
                                 merge_height,
                                 branch_node.key,
-                                branch_node.fork_height,
+                                branch_node.height(),
                                 sibling,
                             ));
                         }

@@ -810,7 +810,7 @@ fn test_smt_random_insert_order_1() {
     let pairs = keys.into_iter().zip(values.into_iter()).collect::<Vec<_>>();
     let smt1 = new_smt(pairs.clone());
     let root1 = smt1.root();
-
+    dbg!("====================================================================");
     let smt2 = new_smt(vec![pairs[1], pairs[2], pairs[0]]);
     let root2 = smt2.root();
     assert_eq!(root1, root2);
