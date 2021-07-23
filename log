@@ -1,0 +1,124 @@
+   Compiling sparse-merkle-tree v0.5.0-rc2 (/home/jjy/workspace/sparse-merkle-tree)
+warning: unused import: `MAX_STACK_SIZE`
+ --> src/merkle_proof.rs:8:11
+  |
+8 |     H256, MAX_STACK_SIZE,
+  |           ^^^^^^^^^^^^^^
+  |
+  = note: `#[warn(unused_imports)]` on by default
+
+warning: unused import: `BranchKey`
+ --> src/traits.rs:3:12
+  |
+3 |     tree::{BranchKey, BranchNode, LeafNode},
+  |            ^^^^^^^^^
+
+warning: unused import: `MAX_STACK_SIZE`
+ --> src/tree.rs:7:31
+  |
+7 |     EXPECTED_PATH_SIZE, H256, MAX_STACK_SIZE,
+  |                               ^^^^^^^^^^^^^^
+
+warning: unused import: `core::cmp::Ordering`
+  --> src/tree.rs:10:5
+   |
+10 | use core::cmp::Ordering;
+   |     ^^^^^^^^^^^^^^^^^^^
+
+warning: unreachable statement
+  --> src/merge.rs:24:9
+   |
+23 |         unreachable!();
+   |         --------------- any code following this expression is unreachable
+24 |         return H256::zero();
+   |         ^^^^^^^^^^^^^^^^^^^^ unreachable statement
+   |
+   = note: `#[warn(unreachable_code)]` on by default
+
+warning: value assigned to `node_height` is never read
+   --> src/merkle_proof.rs:192:21
+    |
+192 |                     node_height = merge_height;
+    |                     ^^^^^^^^^^^
+    |
+    = note: `#[warn(unused_assignments)]` on by default
+    = help: maybe it is overwritten before being read?
+
+warning: unused variable: `origin_node`
+   --> src/merkle_proof.rs:228:21
+    |
+228 |                 let origin_node = node;
+    |                     ^^^^^^^^^^^ help: if this is intentional, prefix it with an underscore: `_origin_node`
+    |
+    = note: `#[warn(unused_variables)]` on by default
+
+warning: unused variable: `case`
+   --> src/tests/tree.rs:569:13
+    |
+569 |         for case in [case1, case2, case3, case4, case5, case6, case7].iter() {
+    |             ^^^^ help: if this is intentional, prefix it with an underscore: `_case`
+
+warning: unused variable: `leaves`
+   --> src/tests/tree.rs:553:46
+    |
+553 |     fn test_try_crash_compiled_merkle_proof((leaves, _n) in leaves(0, 30)) {
+    |                                              ^^^^^^ help: if this is intentional, prefix it with an underscore: `_leaves`
+
+warning: unused variable: `proof`
+   --> src/tests/tree.rs:882:9
+    |
+882 |     let proof = smt.merkle_proof(keys).expect("gen proof");
+    |         ^^^^^ help: if this is intentional, prefix it with an underscore: `_proof`
+
+warning: unused variable: `height`
+  --> src/tree.rs:59:23
+   |
+59 |     fn node_at(&self, height: u8) -> NodeType {
+   |                       ^^^^^^ help: if this is intentional, prefix it with an underscore: `_height`
+
+warning: unused variable: `merge_height`
+   --> src/tree.rs:388:33
+    |
+388 | ...                   let merge_height = key.fork_height(branch_node.key());
+    |                           ^^^^^^^^^^^^ help: if this is intentional, prefix it with an underscore: `_merge_height`
+
+warning: unused variable: `fork_height`
+   --> src/tree.rs:438:21
+    |
+438 |                 let fork_height = key.fork_height(&sibling_key);
+    |                     ^^^^^^^^^^^ help: if this is intentional, prefix it with an underscore: `_fork_height`
+
+warning: value assigned to `sibling_height` is never read
+   --> src/tree.rs:480:17
+    |
+480 |                 sibling_height = merge_height;
+    |                 ^^^^^^^^^^^^^^
+    |
+    = help: maybe it is overwritten before being read?
+
+warning: value assigned to `node_height` is never read
+   --> src/tree.rs:525:13
+    |
+525 |             node_height = merge_height;
+    |             ^^^^^^^^^^^
+    |
+    = help: maybe it is overwritten before being read?
+
+warning: constant is never used: `MAX_STACK_SIZE`
+  --> src/lib.rs:84:1
+   |
+84 | pub(crate) const MAX_STACK_SIZE: usize = 257;
+   | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+   |
+   = note: `#[warn(dead_code)]` on by default
+
+warning: 16 warnings emitted
+
+    Finished test [unoptimized + debuginfo] target(s) in 5.48s
+     Running unittests (target/debug/deps/sparse_merkle_tree-6bbcf95e3751e660)
+
+running 1 test
+test tests::tree::test_smt_single_leaf_small_2 ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 31 filtered out; finished in 0.00s
+

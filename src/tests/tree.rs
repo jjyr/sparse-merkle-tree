@@ -291,6 +291,7 @@ fn test_merkle_proof(key: H256, value: H256) {
 fn new_smt(pairs: Vec<(H256, H256)>) -> SMT {
     let mut smt = SMT::default();
     for (key, value) in pairs {
+        dbg!("update key......................................................");
         smt.update(key, value).unwrap();
     }
     smt
@@ -605,8 +606,57 @@ fn test_smt_single_leaf_small_1() {
         ),
     ];
     let smt = new_smt(pairs.clone());
-    for (k, v) in pairs {
+    dbg!("smt done -------------------------------------------");
+    for (k, v) in pairs[..1].into_iter().cloned() {
         let proof = smt.merkle_proof(vec![k]).expect("gen proof");
+        dbg!(&proof);
+        // let compiled_proof = proof.clone().compile(vec![(k, v)]).expect("compile proof");
+        assert!(proof
+            .verify::<Blake2bHasher>(&smt.root(), vec![(k, v)])
+            .expect("verify proof"));
+        // assert!(compiled_proof.verify::<Blake2bHasher>(smt.root(), vec![(k, v)]).expect("verify compiled proof"));
+    }
+}
+
+#[test]
+fn test_smt_single_leaf_small_2() {
+    let pairs = vec![
+        (
+            H256::from([
+                0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 7, 179, 78, 244, 197, 35, 247,
+                211, 40, 172, 33, 183, 39, 161, 47,
+            ]),
+            H256::from([
+                39, 57, 154, 31, 130, 20, 246, 250, 149, 222, 189, 40, 101, 180, 46, 91, 77, 63,
+                221, 174, 61, 76, 201, 4, 122, 35, 206, 0, 254, 2, 97, 29,
+            ]),
+        ),
+        (
+            H256::from([
+                118, 202, 125, 69, 137, 157, 242, 145, 26, 221, 110, 7, 40, 21, 77, 240, 158, 249,
+                248, 75, 191, 74, 94, 26, 189, 11, 103, 55, 154, 140, 103, 93,
+            ]),
+            H256::from([
+                22, 28, 195, 139, 155, 73, 154, 129, 64, 235, 202, 44, 124, 135, 86, 183, 207, 62,
+                69, 52, 199, 245, 251, 224, 197, 172, 105, 98, 219, 74, 38, 119,
+            ]),
+        ),
+        (
+            H256::from([
+                121, 33, 131, 77, 41, 187, 228, 202, 243, 84, 141, 95, 192, 246, 42, 81, 52, 101,
+                146, 239, 132, 225, 4, 208, 247, 133, 196, 93, 116, 161, 90, 10,
+            ]),
+            H256::from([
+                14, 99, 39, 78, 12, 138, 214, 108, 19, 127, 244, 121, 7, 45, 132, 234, 151, 124,
+                149, 234, 114, 183, 44, 186, 57, 130, 16, 211, 9, 37, 41, 204,
+            ]),
+        ),
+    ];
+    let smt = new_smt(pairs.clone());
+    // dbg!("done smt -------------------------------------------------");
+    for (k, v) in pairs[1..2].into_iter().cloned() {
+        let proof = smt.merkle_proof(vec![k]).expect("gen proof");
+        // dbg!(&proof);
         // let compiled_proof = proof.clone().compile(vec![(k, v)]).expect("compile proof");
         assert!(proof
             .verify::<Blake2bHasher>(&smt.root(), vec![(k, v)])

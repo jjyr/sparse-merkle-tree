@@ -71,6 +71,13 @@ impl BranchNode {
         }
     }
 
+    fn height(&self) -> u8 {
+        match self.node_type {
+            NodeType::Pair(..) => self.fork_height + 1,
+            NodeType::Single(..) => self.fork_height,
+        }
+    }
+
     fn key(&self) -> &H256 {
         &self.key
     }
@@ -364,7 +371,20 @@ impl<H: Hasher + Default, V: Value, S: Store<V>> SparseMerkleTree<H, V, S> {
                                 node = left;
                                 sibling = right;
                             }
-                            path.push((height, branch_node.key, branch_node.fork_height, sibling));
+
+                            let branch_node = self
+                                .store
+                                .get_branch(&sibling)?
+                                .ok_or_else(|| Error::MissingBranch(sibling))?;
+
+                            // recalculate merge info
+                            let merge_height = key.fork_height(branch_node.key());
+                            path.push((
+                                merge_height,
+                                branch_node.key,
+                                branch_node.fork_height,
+                                sibling,
+                            ));
                         }
                     }
                     NodeType::Single(node) => {
@@ -372,6 +392,7 @@ impl<H: Hasher + Default, V: Value, S: Store<V>> SparseMerkleTree<H, V, S> {
                             self.store.remove_leaf(&node)?;
                             self.store.remove_branch(&node)?;
                         } else {
+                            let merge_height = key.fork_height(branch_node.key());
                             path.push((height, branch_node.key, branch_node.fork_height, node));
                         }
                         break;
@@ -382,6 +403,14 @@ impl<H: Hasher + Default, V: Value, S: Store<V>> SparseMerkleTree<H, V, S> {
 
         // compute and store new leaf
         let mut node = hash_leaf::<H>(&key, &value.to_h256());
+        dbg!(
+            key,
+            node,
+            &path,
+            path.iter()
+                .map(|(_, k, _, _)| { key.fork_height(&k) })
+                .collect::<Vec<_>>()
+        );
         // notice when value is zero the leaf is deleted, so we do not need to store it
         if !node.is_zero() {
             self.store.insert_leaf(node, LeafNode { key, value })?;
@@ -431,6 +460,14 @@ impl<H: Hasher + Default, V: Value, S: Store<V>> SparseMerkleTree<H, V, S> {
                 let node_key = key.parent_path(node_height);
                 let n_zeros = merge_height - node_height;
                 node = align_with_zeros::<H>(node_height, &node_key, &node, n_zeros);
+                dbg!(
+                    "update align node",
+                    origin_node,
+                    node_height,
+                    node_key,
+                    node,
+                    n_zeros,
+                );
                 node_height = merge_height;
             }
 
@@ -439,6 +476,14 @@ impl<H: Hasher + Default, V: Value, S: Store<V>> SparseMerkleTree<H, V, S> {
                 let node_key = sibling_key.parent_path(sibling_height);
                 let n_zeros = merge_height - sibling_height;
                 sibling = align_with_zeros::<H>(sibling_height, &node_key, &sibling, n_zeros);
+                dbg!(
+                    "update align sibling",
+                    origin_sibling,
+                    sibling_height,
+                    node_key,
+                    sibling,
+                    n_zeros,
+                );
                 sibling_height = merge_height;
             }
 
@@ -451,6 +496,7 @@ impl<H: Hasher + Default, V: Value, S: Store<V>> SparseMerkleTree<H, V, S> {
             };
 
             let parent = merge::<H>(merge_height, &node_key, &lhs, &rhs);
+            dbg!("merge", merge_height, node_key, lhs, rhs, parent);
 
             if !node.is_zero() {
                 // node is exists
@@ -515,10 +561,17 @@ impl<H: Hasher + Default, V: Value, S: Store<V>> SparseMerkleTree<H, V, S> {
             match branch_node.node_at(height) {
                 NodeType::Pair(left, right) => {
                     if height > branch_node.fork_height {
+                        dbg!(
+                            "insert sibling",
+                            height,
+                            branch_node.fork_height,
+                            sibling_key,
+                            node
+                        );
                         cache.entry((height, sibling_key)).or_insert((
                             sibling_key,
                             node,
-                            branch_node.fork_height,
+                            branch_node.height(),
                         ));
                         break;
                     } else {
@@ -542,10 +595,16 @@ impl<H: Hasher + Default, V: Value, S: Store<V>> SparseMerkleTree<H, V, S> {
                             .get_branch(&sibling)?
                             .ok_or_else(|| Error::MissingBranch(sibling))?;
 
-
+                        dbg!(
+                            "insert sibling2",
+                            height,
+                            branch_node.fork_height,
+                            sibling_key,
+                            sibling
+                        );
                         cache.insert(
                             (height, sibling_key),
-                            (branch_node.key, sibling, branch_node.fork_height),
+                            (branch_node.key, sibling, branch_node.height()),
                         );
                     }
                 }
@@ -553,7 +612,7 @@ impl<H: Hasher + Default, V: Value, S: Store<V>> SparseMerkleTree<H, V, S> {
                     if key != branch_node.key() {
                         cache.insert(
                             (height, sibling_key),
-                            (sibling_key, node, branch_node.fork_height),
+                            (sibling_key, node, branch_node.height()),
                         );
                     }
                     break;
@@ -635,6 +694,14 @@ impl<H: Hasher + Default, V: Value, S: Store<V>> SparseMerkleTree<H, V, S> {
                             let origin_sibling = sibling;
                             sibling =
                                 align_with_zeros::<H>(sibling_height, &node_key, &sibling, n_zeros);
+                            dbg!(
+                                "merkle proof align sibling",
+                                origin_sibling,
+                                sibling_height,
+                                node_key,
+                                sibling,
+                                n_zeros,
+                            );
                         }
                         // save first non-zero sibling's height for leaves
                         proof.push((sibling, node_height));
