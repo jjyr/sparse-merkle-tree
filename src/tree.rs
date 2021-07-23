@@ -496,7 +496,7 @@ impl<H: Hasher + Default, V: Value, S: Store<V>> SparseMerkleTree<H, V, S> {
     fn fetch_merkle_path(
         &self,
         key: &H256,
-        cache: &mut BTreeMap<(u8, H256), (H256, u8)>,
+        cache: &mut BTreeMap<(u8, H256), (H256, H256, u8)>,
     ) -> Result<()> {
         let mut node = self.root.node;
         loop {
@@ -515,9 +515,11 @@ impl<H: Hasher + Default, V: Value, S: Store<V>> SparseMerkleTree<H, V, S> {
             match branch_node.node_at(height) {
                 NodeType::Pair(left, right) => {
                     if height > branch_node.fork_height {
-                        cache
-                            .entry((height, sibling_key))
-                            .or_insert((node, branch_node.fork_height));
+                        cache.entry((height, sibling_key)).or_insert((
+                            sibling_key,
+                            node,
+                            branch_node.fork_height,
+                        ));
                         break;
                     } else {
                         let sibling;
@@ -534,12 +536,25 @@ impl<H: Hasher + Default, V: Value, S: Store<V>> SparseMerkleTree<H, V, S> {
                             sibling = right;
                             node = left;
                         }
-                        cache.insert((height, sibling_key), (sibling, branch_node.fork_height));
+
+                        let branch_node = self
+                            .store
+                            .get_branch(&sibling)?
+                            .ok_or_else(|| Error::MissingBranch(sibling))?;
+
+
+                        cache.insert(
+                            (height, sibling_key),
+                            (branch_node.key, sibling, branch_node.fork_height),
+                        );
                     }
                 }
                 NodeType::Single(node) => {
                     if key != branch_node.key() {
-                        cache.insert((height, sibling_key), (node, branch_node.fork_height));
+                        cache.insert(
+                            (height, sibling_key),
+                            (sibling_key, node, branch_node.fork_height),
+                        );
                     }
                     break;
                 }
@@ -559,7 +574,7 @@ impl<H: Hasher + Default, V: Value, S: Store<V>> SparseMerkleTree<H, V, S> {
         keys.sort_unstable();
 
         // fetch all merkle path
-        let mut cache: BTreeMap<(u8, H256), (H256, u8)> = Default::default();
+        let mut cache: BTreeMap<(u8, H256), (H256, H256, u8)> = Default::default();
         if !self.is_empty() {
             for k in &keys {
                 self.fetch_merkle_path(k, &mut cache)?;
@@ -612,11 +627,12 @@ impl<H: Hasher + Default, V: Value, S: Store<V>> SparseMerkleTree<H, V, S> {
                 leaves_path[leaf_index].push(height);
             } else {
                 match cache.remove(&(node_height, sibling_key)) {
-                    Some((mut sibling, sibling_height)) => {
+                    Some((origin_sibling_key, mut sibling, sibling_height)) => {
                         // align sibling to node_height
                         if sibling_height < node_height {
-                            let node_key = sibling_key.parent_path(sibling_height);
+                            let node_key = origin_sibling_key.parent_path(sibling_height);
                             let n_zeros = node_height - sibling_height;
+                            let origin_sibling = sibling;
                             sibling =
                                 align_with_zeros::<H>(sibling_height, &node_key, &sibling, n_zeros);
                         }

@@ -207,16 +207,16 @@ impl MerkleProof {
                         .expect("pop sibling");
                     (sibling, node_height)
                 } else {
-                    let merge_height = leaves_path[leaf_index]
-                        .front()
-                        .copied()
-                        .unwrap_or(node_height);
-                    if node_height != merge_height {
-                        let parent_key = key.copy_bits(merge_height);
-                        // skip zeros
-                        tree_buf.insert((merge_height, parent_key), (leaf_index, node));
-                        continue;
-                    }
+                    // let merge_height = leaves_path[leaf_index]
+                    //     .front()
+                    //     .copied()
+                    //     .unwrap_or(node_height);
+                    // if node_height != merge_height {
+                    //     let parent_key = key.copy_bits(merge_height);
+                    //     // skip zeros
+                    //     tree_buf.insert((merge_height, parent_key), (leaf_index, node));
+                    //     continue;
+                    // }
                     let (node, height) = proof.pop_front().ok_or(Error::CorruptedProof)?;
                     (node, height)
                 };
@@ -225,7 +225,9 @@ impl MerkleProof {
             if node_height < merge_height {
                 let node_key = key.parent_path(node_height);
                 let n_zeros = merge_height - node_height;
+                let origin_node = node;
                 node = align_with_zeros::<H>(node_height, &node_key, &node, n_zeros);
+                // dbg!("proof align node", node_height, node_key, origin_node, node, n_zeros);
                 node_height = merge_height;
             }
 
@@ -236,6 +238,7 @@ impl MerkleProof {
             } else {
                 (node, sibling)
             };
+            // dbg!("proof merge", merge_height, node_key, lhs, rhs);
             let parent = merge::<H>(merge_height, &node_key, &lhs, &rhs);
             // // skip zero merkle path
             // let parent_key = key.parent_path(height);
