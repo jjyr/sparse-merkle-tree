@@ -227,7 +227,7 @@ impl MerkleProof {
                 let n_zeros = merge_height - node_height;
                 let origin_node = node;
                 node = align_with_zeros::<H>(node_height, &node_key, &node, n_zeros);
-                dbg!("proof align node", node_height, node_key, origin_node, node, n_zeros);
+                // dbg!("proof align node", node_height, node_key, origin_node, node, n_zeros);
                 node_height = merge_height;
             }
 
@@ -238,7 +238,7 @@ impl MerkleProof {
             } else {
                 (node, sibling)
             };
-            dbg!("proof merge", merge_height, node_key, lhs, rhs);
+            // dbg!("proof merge", merge_height, node_key, lhs, rhs);
             let parent = merge::<H>(merge_height, &node_key, &lhs, &rhs);
             // // skip zero merkle path
             // let parent_key = key.parent_path(height);

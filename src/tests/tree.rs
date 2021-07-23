@@ -291,7 +291,7 @@ fn test_merkle_proof(key: H256, value: H256) {
 fn new_smt(pairs: Vec<(H256, H256)>) -> SMT {
     let mut smt = SMT::default();
     for (key, value) in pairs {
-        dbg!("update key......................................................");
+        // dbg!("update key......................................................");
         smt.update(key, value).unwrap();
     }
     smt
@@ -606,10 +606,10 @@ fn test_smt_single_leaf_small_1() {
         ),
     ];
     let smt = new_smt(pairs.clone());
-    dbg!("smt done -------------------------------------------");
+    // dbg!("smt done -------------------------------------------");
     for (k, v) in pairs[..1].into_iter().cloned() {
         let proof = smt.merkle_proof(vec![k]).expect("gen proof");
-        dbg!(&proof);
+        // dbg!(&proof);
         // let compiled_proof = proof.clone().compile(vec![(k, v)]).expect("compile proof");
         assert!(proof
             .verify::<Blake2bHasher>(&smt.root(), vec![(k, v)])
